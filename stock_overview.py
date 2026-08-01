@@ -18,6 +18,7 @@ from risk_signal import (
     compute_rsi, compute_macd, compute_bollinger, compute_ema,
     compute_atr, compute_vwap, compute_stochastic,
 )
+from financials_news import compute_trend_outlook
 
 
 def _fmt_large_number(n, currency_symbol=""):
@@ -66,13 +67,21 @@ def render_company_overview(result: dict):
     arrow = "▲" if change >= 0 else "▼"
     color = "green" if change >= 0 else "red"
 
-    st.subheader(f"{result['company_name']} ({result['ticker']})")
-    st.markdown(
-        f"### {currency_symbol}{last_price:,.2f} &nbsp; "
-        f":{color}[{arrow} {abs(change):.2f} ({change_pct:+.2f}%)]"
-    )
+    name_col, price_col = st.columns([1.6, 1])
+    with name_col:
+        st.subheader(f"{result['company_name']} ({result['ticker']})")
+    with price_col:
+        st.markdown(
+            f"<div style='text-align:right;'>"
+            f"<span style='font-size:1.7rem; font-weight:800;'>{currency_symbol}{last_price:,.2f}</span><br>"
+            f"<span style='color:{'#22c55e' if change >= 0 else '#ef4444'}; font-weight:700;'>"
+            f"{arrow} {abs(change):.2f} ({change_pct:+.2f}%)</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
-    cols = st.columns(4)
+    st.write("")
+
     stats = [
         ("Market Cap", _fmt_large_number(info.get("marketCap"), currency_symbol)),
         ("Sector", _safe(info, "sector")),
@@ -83,9 +92,41 @@ def render_company_overview(result: dict):
         ("P/E Ratio", round(info["trailingPE"], 2) if info.get("trailingPE") else "N/A"),
         ("Dividend Yield", _fmt_pct(info.get("dividendYield")) if info.get("dividendYield") else "N/A"),
     ]
+    cols = st.columns(2)
     for i, (label, value) in enumerate(stats):
-        with cols[i % 4]:
+        with cols[i % 2]:
             st.metric(label, value)
+
+    risk_index = result.get("risk", {}).get("risk_index")
+    if risk_index is not None:
+        risk_color = "#22c55e" if risk_index < 35 else "#f59e0b" if risk_index < 70 else "#ef4444"
+        st.markdown(
+            f"""
+            <div style="margin-top: 0.7rem; padding: 14px 16px; border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; background: rgba(255,255,255,0.025);">
+                <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(255,255,255,0.58); margin-bottom: 6px;">Risk Index</div>
+                <div style="font-size: 1.15rem; font-weight: 800; color: {risk_color};">{risk_index:.1f}/100</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    outlook = compute_trend_outlook(result)
+    if outlook is not None:
+        direction = outlook["direction"]
+        arrow = {"up": "▲", "down": "▼", "sideways": "→"}[direction]
+        color = {"up": "#22c55e", "down": "#ef4444", "sideways": "#f59e0b"}[direction]
+        st.markdown(
+            f"""
+            <div style="margin-top: 0.7rem; padding: 14px 16px; border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; background: rgba(255,255,255,0.025);">
+                <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(255,255,255,0.58); margin-bottom: 6px;">Outlook</div>
+                <div style="font-size: 1.05rem; font-weight: 800; color: {color};">{arrow} {outlook['trend_label']}</div>
+                <div style="margin-top: 6px; font-size: 0.92rem; color: rgba(255,255,255,0.78);">Confidence: {outlook['confidence_label']} ({outlook['confidence']}%)</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height: 70px'></div>", unsafe_allow_html=True)
 
 
 # --------------------------------------------------------------------------
@@ -169,7 +210,38 @@ def _stars(score_1_to_5: int) -> str:
     return "★" * score_1_to_5 + "☆" * (5 - score_1_to_5)
 
 
+def render_price_direction_summary(result: dict):
+    """
+    Plain-language read of what the price is likely to do next — direction
+    only (increase / decrease / stay about the same), with a qualitative
+    confidence read instead of an exact number or price target.
+    """
+    outlook = compute_trend_outlook(result)
+    if outlook is None:
+        return
+
+    direction_text = {
+        "up": "increase",
+        "down": "decrease",
+        "sideways": "stay about the same",
+    }[outlook["direction"]]
+    color = {"up": "green", "down": "red", "sideways": "orange"}[outlook["direction"]]
+
+    st.markdown(
+        f"#### In simple terms: the price is likely to :{color}[**{direction_text}**] "
+        f"in the near term."
+    )
+    st.caption(
+        f"Confidence: {outlook['confidence_label']} — based on recent trend and "
+        f"momentum patterns. This is a near-term directional read, not an exact "
+        f"price target or a guarantee."
+    )
+
+
 def render_buy_sell_meter(result: dict):
+    render_price_direction_summary(result)
+    st.divider()
+
     hist = result["history"]
     close = hist["Close"]
     info = result.get("info", {})

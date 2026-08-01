@@ -1,12 +1,13 @@
 """
 demo_app.py
 Stock analytics platform — wires together risk_signal.py, stock_overview.py,
-financials_news.py, risk_analysis_export.py, and tools.py.
+financials_news.py, and risk_analysis_export.py.
 
 Run with:
     python -m streamlit run demo_app.py
 
-Portfolio Tracker, Screener, and Heatmap are intentionally NOT included.
+Portfolio Tracker, Screener, Heatmap, Compare, Returns Calculator, Export,
+and Watchlist are intentionally NOT included.
 """
 
 import streamlit as st
@@ -18,10 +19,9 @@ from stock_overview import (
 )
 from financials_news import (
     render_financial_statements, render_news,
-    render_analyst_summary, render_prediction,
+    render_analyst_summary,
 )
-from risk_analysis_export import render_extended_risk_analysis, render_export_section
-from tools import render_returns_calculator, render_compare_companies, render_watchlist
+from risk_analysis_export import render_extended_risk_analysis
 
 
 # --------------------------------------------------------------------------
@@ -61,15 +61,19 @@ code, pre, .stCodeBlock {
     font-family: 'JetBrains Mono', monospace !important;
 }
 
-.block-container { padding-top: 1.6rem; padding-bottom: 3rem; max-width: 1200px; }
+.block-container { padding-top: 1rem; padding-bottom: 2rem; max-width: 100% !important; }
 
 /* ---------- Masthead ---------- */
 .ss-masthead {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     padding-bottom: 18px;
     margin-bottom: 22px;
+    border-bottom: 1px solid var(--card-border);
+}
+.ss-sidebar-masthead {
+    padding-bottom: 12px;
+    margin-bottom: 16px;
     border-bottom: 1px solid var(--card-border);
 }
 .ss-brand { display: flex; align-items: center; gap: 12px; }
@@ -81,19 +85,6 @@ code, pre, .stCodeBlock {
 }
 .ss-brand-title { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
 .ss-brand-tag { font-size: 0.8rem; color: var(--text-dim); font-weight: 500; }
-.ss-badge {
-    font-size: 0.72rem; font-weight: 600; color: var(--text-dim);
-    border: 1px solid var(--card-border); border-radius: 20px;
-    padding: 5px 12px; background: var(--card-bg);
-    display: inline-flex; align-items: center; gap: 7px;
-}
-.ss-live-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-dim);
-    animation: ss-pulse 2s ease-in-out infinite;
-}
-@keyframes ss-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* ---------- Metric cards ---------- */
 div[data-testid="stMetric"] {
@@ -194,30 +185,20 @@ hr { margin: 1.3rem 0; border-color: var(--card-border); }
     border-top: 1px solid var(--card-border);
     font-size: 0.78rem; color: var(--text-dim); text-align: center;
 }
+.ss-disclaimer {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    margin-bottom: 1rem;
+    padding: 0.7rem 0.95rem;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 10px;
+    background: rgba(245, 158, 11, 0.12);
+    color: #fcd34d;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
 </style>
-""", unsafe_allow_html=True)
-
-
-# --------------------------------------------------------------------------
-# MASTHEAD
-# --------------------------------------------------------------------------
-
-st.markdown("""
-<div class="ss-masthead">
-    <div class="ss-brand">
-        <div class="ss-brand-icon">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="20" height="20">
-                <path d="M3 17L9 11L13 15L21 6" stroke="#06170c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M15 6H21V12" stroke="#06170c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-        </div>
-        <div>
-            <div class="ss-brand-title">StockSense</div>
-            <div class="ss-brand-tag">Real-time analytics & decision support</div>
-        </div>
-    </div>
-    <div class="ss-badge"><span class="ss-live-dot"></span>Live data · Yahoo Finance</div>
-</div>
 """, unsafe_allow_html=True)
 
 
@@ -226,6 +207,22 @@ st.markdown("""
 # --------------------------------------------------------------------------
 
 with st.sidebar:
+    st.markdown("""
+    <div class="ss-masthead ss-sidebar-masthead">
+        <div class="ss-brand">
+            <div class="ss-brand-icon">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+                    <path d="M3 17L9 11L13 15L21 6" stroke="#06170c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M15 6H21V12" stroke="#06170c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div>
+                <div class="ss-brand-title">StockSense</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.markdown("#### Search")
     query_input = st.text_input(
         "Company name or ticker",
@@ -245,10 +242,6 @@ with st.sidebar:
                 st.session_state["last_query"] = symbol
 
     st.divider()
-    with st.expander("Watchlist", expanded=False):
-        render_watchlist()
-
-    st.divider()
     st.caption(
         "Data via Yahoo Finance, typically delayed ~15 min. "
         "Signals shown are rule-based and educational — not financial advice."
@@ -258,6 +251,11 @@ with st.sidebar:
 # --------------------------------------------------------------------------
 # MAIN CONTENT
 # --------------------------------------------------------------------------
+
+st.markdown(
+    '<div class="ss-disclaimer">Forecasts are estimates based on historical patterns only and are not guarantees of future price movement. Do not treat this as financial advice.</div>',
+    unsafe_allow_html=True,
+)
 
 if "last_query" not in st.session_state:
     st.markdown("### Search a stock to get started")
@@ -280,13 +278,15 @@ if "last_query" not in st.session_state:
                 f'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
                 f'stroke-linejoin="round">{ICONS[name]}</svg>')
 
+    ICONS["insight"] = '<path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6h5.4c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/>'
+
     features = [
-        ("chart", "Live Charts", "Candlestick charts with SMA, Bollinger Bands, and volume across 6 timeframes."),
-        ("signal", "Buy/Sell Signal", "An explainable, rule-based score across trend, momentum, and risk."),
+        ("chart", "Charts", "Candlestick charts with selectable indicators, updated timeframes, and volume."),
+        ("signal", "Buy/Sell Signal", "A plain-language read on likely direction, plus an explainable rule-based score."),
         ("sliders", "Technical Indicators", "RSI, MACD, EMA, ATR, VWAP, and Stochastic with plain-language reads."),
         ("alert", "Risk Analysis", "Volatility, drawdown, beta, and a composite 0–100 risk index."),
         ("document", "Financials & News", "Income statement, balance sheet, cash flow, and recent headlines."),
-        ("compare", "Compare & Calculate", "Side-by-side comparisons and a what-if returns calculator."),
+        ("insight", "Summary & Outlook", "A rule-based summary and a simple near-term trend outlook."),
     ]
     cols = st.columns(3)
     for i, (icon_name, title, desc) in enumerate(features):
@@ -303,55 +303,45 @@ else:
     if "error" in result:
         st.error(result["error"])
     else:
-        with st.container(border=True):
-            render_company_overview(result)
+        overview_col, chart_col = st.columns([0.85, 1.35])
+        with overview_col:
+            with st.container(border=True):
+                render_company_overview(result)
+        with chart_col:
+            with st.container(border=True):
+                render_live_chart_section(
+                    ticker=result["ticker"],
+                    company_name=result["company_name"],
+                    currency_symbol=result["currency_symbol"],
+                )
 
         st.write("")
 
         tabs = st.tabs([
-            "Chart", "Signal & Risk", "Technicals",
-            "Key Stats", "Financials & News", "Summary & Outlook",
-            "Returns Calculator", "Compare", "Export",
+            "Signal & Risk", "Technicals", "Key Stats",
+            "Financials & News", "Summary",
         ])
 
         with tabs[0]:
-            render_live_chart_section(
-                ticker=result["ticker"],
-                company_name=result["company_name"],
-                currency_symbol=result["currency_symbol"],
-            )
-
-        with tabs[1]:
             render_buy_sell_meter(result)
             st.divider()
             render_risk_panel(result)
             st.divider()
             render_extended_risk_analysis(result)
 
-        with tabs[2]:
+        with tabs[1]:
             render_technical_indicators(result)
 
-        with tabs[3]:
+        with tabs[2]:
             render_key_statistics(result)
 
-        with tabs[4]:
+        with tabs[3]:
             render_financial_statements(result["ticker_obj"])
             st.divider()
             render_news(result["ticker_obj"])
 
-        with tabs[5]:
+        with tabs[4]:
             render_analyst_summary(result)
-            st.divider()
-            render_prediction(result)
-
-        with tabs[6]:
-            render_returns_calculator(result["ticker"], result["currency_symbol"])
-
-        with tabs[7]:
-            render_compare_companies()
-
-        with tabs[8]:
-            render_export_section(result)
 
 st.markdown(
     '<div class="ss-footer">StockSense is an educational analytics tool. '

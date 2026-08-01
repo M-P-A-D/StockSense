@@ -1,0 +1,182 @@
+StockSense Project Summary
+=========================
+
+1. What this project is
+-----------------------
+StockSense is an analytics and decision-support project for stock market analysis.
+It is mainly an AI/ML-inspired data analysis project rather than a fully trained machine learning system.
+
+Why:
+- It uses historical and live market data.
+- It computes technical indicators and summaries.
+- It generates rule-based signals and risk scores.
+- It does not train a model on past data to predict prices with high certainty.
+
+So the project is best described as:
+- Data analysis project
+- Analytics dashboard project
+- Rule-based decision support system
+- AI/ML-inspired, but not a full AI/ML model in the traditional sense
+
+2. What problem it solves
+-------------------------
+The project helps users quickly understand a stock by combining:
+- price movement
+- technical indicators
+- risk level
+- company fundamentals
+- news and financial context
+
+It gives a simple, explainable overview of whether a stock looks risky, bullish, bearish, or neutral.
+It is useful for education, exploration, and decision support, not for guaranteed investment advice.
+
+3. How the project works
+------------------------
+The app takes a stock ticker or company name, fetches data from Yahoo Finance, then computes several indicators and displays them in a Streamlit dashboard.
+
+Main workflow:
+1. User enters a stock name or ticker.
+2. The app resolves the ticker using Yahoo Finance data.
+3. Historical price data is fetched.
+4. Technical indicators and risk metrics are calculated.
+5. A rule-based buy/sell signal and a risk index are generated.
+6. The results are shown in charts, tables, and summaries.
+
+4. Formula explanations and justification
+---------------------------------------
+The project uses several well-known technical analysis formulas.
+These are justified because they are common, transparent, and widely used in market analysis.
+
+A) Relative Strength Index (RSI)
+- Formula: RSI is based on the average gains and average losses over a given period.
+- Purpose: Measures whether a stock is becoming overbought or oversold.
+- Justification: RSI is a standard momentum indicator used to detect strength or weakness.
+- Interpretation:
+  - RSI above 70: often considered overbought
+  - RSI below 30: often considered oversold
+
+B) Moving Average Convergence Divergence (MACD)
+- Formula: MACD is calculated by subtracting a slower moving average from a faster moving average.
+- Purpose: Measures momentum and trend direction.
+- Justification: MACD is widely used to identify momentum changes and trend shifts.
+- Interpretation:
+  - MACD line above signal line: bullish momentum
+  - MACD line below signal line: bearish momentum
+
+C) Bollinger Bands
+- Formula: Upper and lower bands are calculated around a moving average using standard deviation.
+- Purpose: Shows volatility and possible price extremes.
+- Justification: Bollinger Bands are commonly used to identify volatility and reversals.
+- Interpretation:
+  - Price near upper band: possible overbought condition
+  - Price near lower band: possible oversold condition
+
+D) Exponential Moving Average (EMA) and Simple Moving Average (SMA)
+- Formula: EMA gives more weight to recent prices; SMA gives equal weight over a period.
+- Purpose: Helps identify trend direction.
+- Justification: Moving averages are basic trend-following tools and are widely accepted in technical analysis.
+
+E) Average True Range (ATR)
+- Formula: ATR measures the average range of price movement over a period.
+- Purpose: Shows volatility.
+- Justification: ATR is a standard tool for understanding how much price varies.
+
+F) VWAP (Volume Weighted Average Price)
+- Formula: Weighted by volume over time.
+- Purpose: Shows the average price traded with volume weighting.
+- Justification: VWAP is commonly used to understand average transaction price in relation to volume.
+
+G) Stochastic Oscillator
+- Formula: Compares current price to its recent range.
+- Purpose: Detects momentum and possible overbought or oversold conditions.
+- Justification: This is a standard momentum indicator used in technical analysis.
+
+5. How the Risk Index works
+---------------------------
+The Risk Index is a composite score from 0 to 100.
+A higher score means higher perceived risk.
+
+The current version combines four factors:
+- Annualized volatility
+- Maximum drawdown
+- RSI level
+- Volume spike ratio
+
+The formula uses weighted contributions:
+- Volatility contributes 40%
+- Drawdown contributes 30%
+- RSI contributes 20%
+- Volume spike contributes 10%
+
+Why this is reasonable:
+- Volatility reflects how much the stock moves.
+- Drawdown reflects how badly the stock can fall from a peak.
+- RSI captures overbought/oversold momentum conditions.
+- Volume spike helps flag unusual trading activity.
+
+Interpretation:
+- 0 to 35: relatively lower risk
+- 35 to 70: moderate risk
+- 70 to 100: higher risk
+
+Important note:
+The Risk Index is not a true financial risk model. It is a rule-based educational score built from a few indicators.
+
+6. Confidence Levels
+--------------------
+The confidence shown for the outlook is based on how many signals agree.
+The project checks:
+- the recent trend direction
+- the MACD signal
+- the RSI position
+
+The confidence is then converted into a simple percentage.
+
+Meaning:
+- High confidence means several indicators are pointing in the same direction.
+- Low confidence means the signals are mixed or weak.
+
+Important note:
+Confidence here is not a probability guarantee. It is a heuristic score used to show how strong the current evidence appears.
+
+7. Buy/Sell signal explanation
+------------------------------
+The buy/sell signal is also rule-based.
+It uses conditions such as:
+- price above 50-day and 200-day moving averages
+- MACD bullish or bearish
+- RSI overbought or oversold
+- price near upper or lower Bollinger Band
+- overall risk level
+
+The system adds or subtracts points based on these conditions and then produces one of three outputs:
+- BUY
+- HOLD / WATCH
+- DON'T BUY
+
+This is not an investment recommendation. It is an educational signal.
+
+8. Is everything ethical?
+-------------------------
+Mostly yes, but with important limits.
+
+Ethical aspects:
+- The project uses public market data.
+- It aims to educate users and support analysis.
+- It is transparent about being rule-based and not a guarantee.
+- It avoids pretending to be an authoritative financial advisor.
+
+Potential concerns:
+- Financial data can influence user decisions.
+- The project could be misused by someone relying on it for real trading without professional advice.
+- The outputs are simplified and may miss important real-world factors.
+
+Overall ethical view:
+The project is ethical when used for learning, research, and education.
+It becomes less ethical when used as a substitute for professional financial advice or as a basis for major financial decisions.
+
+9. Overall conclusion
+---------------------
+This project is a practical analytics dashboard that combines financial data, technical indicators, and explainable rules to help users understand stock behavior.
+It is not a fully trained AI model and should not be treated as a guaranteed prediction tool.
+It is best used as an educational and analytical support tool.

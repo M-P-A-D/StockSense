@@ -1,12 +1,12 @@
 """
 financials_news.py
 Financial Statements, News & Events, an Analyst-style Summary (rule-based,
-not a live LLM call), and an educational trend Prediction.
+not a live LLM call), and a trend Prediction.
 
 Import:
     from financials_news import (
         render_financial_statements, render_news,
-        render_analyst_summary, render_prediction,
+        render_analyst_summary, render_prediction, compute_trend_outlook,
     )
 """
 
@@ -162,33 +162,28 @@ def render_analyst_summary(result: dict):
 # 4. PREDICTION (educational, probability-flavored — NOT a real forecast)
 # --------------------------------------------------------------------------
 
-def render_prediction(result: dict):
-    st.subheader("Trend Outlook (Educational)")
-    st.caption(
-        "This is a simple statistical projection based on recent price history — "
-        "not a guarantee of future performance. Markets are influenced by many "
-        "factors this model does not capture."
-    )
-
+def compute_trend_outlook(result: dict) -> dict | None:
+    """
+    Shared helper: simple statistical trend projection, reused by both the
+    detailed Trend Outlook panel and the plain-language Signal & Risk summary.
+    Returns None if there isn't enough price history.
+    """
     hist = result["history"]
     close = hist["Close"]
 
     if len(close) < 20:
-        st.info("Not enough price history for a trend projection.")
-        return
+        return None
 
-    # Simple linear regression on the last 30 sessions to gauge slope/direction
     window = min(30, len(close))
     y = close.tail(window).values
     x = np.arange(window)
     slope, intercept = np.polyfit(x, y, 1)
-    slope_pct = (slope / y.mean()) * 100  # slope as % of average price per session
+    slope_pct = (slope / y.mean()) * 100
 
     rsi = compute_rsi(close).iloc[-1]
     macd_line, signal_line, _ = compute_macd(close)
     macd_bullish = macd_line.iloc[-1] > signal_line.iloc[-1]
 
-    # Combine signals into a simple directional confidence score
     votes = 0
     total = 3
     if slope_pct > 0:
@@ -197,18 +192,47 @@ def render_prediction(result: dict):
         votes += 1
     if 40 <= rsi <= 65:
         votes += 1
-
     confidence = round((votes / total) * 100)
-    if slope_pct > 0.15:
-        trend_label = "▲ Uptrend"
-    elif slope_pct < -0.15:
-        trend_label = "▼ Downtrend"
-    else:
-        trend_label = "→ Sideways / Range-bound"
 
+    if slope_pct > 0.15:
+        direction, trend_label = "up", "Uptrend"
+    elif slope_pct < -0.15:
+        direction, trend_label = "down", "Downtrend"
+    else:
+        direction, trend_label = "sideways", "Sideways / Range-bound"
+
+    if confidence >= 67:
+        confidence_label = "Fairly likely"
+    elif confidence >= 34:
+        confidence_label = "Uncertain — mixed signals"
+    else:
+        confidence_label = "Low confidence"
+
+    return {
+        "direction": direction,
+        "trend_label": trend_label,
+        "confidence": confidence,
+        "confidence_label": confidence_label,
+    }
+
+
+def render_prediction(result: dict):
+    st.subheader("Trend Outlook")
+    st.caption(
+        "This is a simple statistical projection based on recent price history — "
+        "not a guarantee of future performance. Markets are influenced by many "
+        "factors this model does not capture."
+    )
+
+    outlook = compute_trend_outlook(result)
+    if outlook is None:
+        st.info("Not enough price history for a trend projection.")
+        return
+
+    arrow = {"up": "▲", "down": "▼", "sideways": "→"}[outlook["direction"]]
     c1, c2 = st.columns(2)
-    c1.metric("Expected Trend", trend_label)
-    c2.metric("Confidence", f"{confidence}%")
+    c1.metric("Expected Trend", f"{arrow} {outlook['trend_label']}")
+    c2.metric("Confidence", f"{outlook['confidence']}%")
 
     st.warning(
         "Forecasts are estimates based on historical patterns only and are "

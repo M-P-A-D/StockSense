@@ -14,7 +14,6 @@ import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
-import time
 
 
 # --------------------------------------------------------------------------
@@ -422,17 +421,33 @@ def get_chart_data(symbol: str, timeframe_label: str = "1D") -> pd.DataFrame:
 
 def render_price_chart(hist: pd.DataFrame, ticker: str, company_name: str,
                         currency_symbol: str, timeframe_label: str = "1D"):
-    """Render an interactive candlestick + volume chart with SMA/Bollinger overlays."""
+    """Render an interactive candlestick + volume chart with a full menu of
+    selectable technical indicators. Hovering the cursor over the chart
+    shows the value of every active indicator at that point (unified hover)."""
     if hist.empty:
         st.warning("No chart data available for this timeframe.")
         return
 
-    show_sma = st.checkbox("Show moving averages (20/50)", value=True, key=f"sma_{ticker}")
-    show_bb = st.checkbox("Show Bollinger Bands", value=False, key=f"bb_{ticker}")
+    overlay_options = ["SMA 20", "SMA 50", "SMA 100", "SMA 200", "EMA 20", "EMA 50", "Bollinger Bands", "VWAP"]
+    subpanel_options = ["RSI", "MACD", "Stochastic"]
+
+    selected_overlays = st.multiselect(
+        "Chart overlays", overlay_options, default=["SMA 20", "SMA 50"], key=f"ov_{ticker}",
+    )
+    selected_subpanels = st.multiselect(
+        "Additional indicator panels", subpanel_options, default=[], key=f"sp_{ticker}",
+    )
+
+    n_sub = len(selected_subpanels)
+    total_rows = 2 + n_sub
+    price_h = 0.5 if n_sub else 0.72
+    volume_h = 0.15 if n_sub else 0.28
+    sub_h = (1 - price_h - volume_h) / n_sub if n_sub else 0
+    row_heights = [price_h, volume_h] + [sub_h] * n_sub
 
     fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True,
-        row_heights=[0.75, 0.25], vertical_spacing=0.03,
+        rows=total_rows, cols=1, shared_xaxes=True,
+        row_heights=row_heights, vertical_spacing=0.03,
     )
 
     fig.add_trace(go.Candlestick(
@@ -441,42 +456,77 @@ def render_price_chart(hist: pd.DataFrame, ticker: str, company_name: str,
         name=ticker, increasing_line_color="#2ecc71", decreasing_line_color="#e74c3c",
     ), row=1, col=1)
 
-    if show_sma and len(hist) >= 20:
-        fig.add_trace(go.Scatter(
-            x=hist.index, y=hist["Close"].rolling(20).mean(),
-            line=dict(color="#f39c12", width=1.3), name="SMA 20",
-        ), row=1, col=1)
-    if show_sma and len(hist) >= 50:
-        fig.add_trace(go.Scatter(
-            x=hist.index, y=hist["Close"].rolling(50).mean(),
-            line=dict(color="#3498db", width=1.3), name="SMA 50",
-        ), row=1, col=1)
-
-    if show_bb:
-        upper, mid, lower = compute_bollinger(hist["Close"])
-        fig.add_trace(go.Scatter(x=hist.index, y=upper, line=dict(color="#9b59b6", width=1, dash="dot"),
-                                  name="BB Upper"), row=1, col=1)
-        fig.add_trace(go.Scatter(x=hist.index, y=lower, line=dict(color="#9b59b6", width=1, dash="dot"),
-                                  name="BB Lower", fill="tonexty",
-                                  fillcolor="rgba(155,89,182,0.08)"), row=1, col=1)
+    overlay_colors = {
+        "SMA 20": "#f39c12", "SMA 50": "#3498db", "SMA 100": "#9b59b6", "SMA 200": "#e91e63",
+        "EMA 20": "#1abc9c", "EMA 50": "#16a085",
+    }
+    for opt in selected_overlays:
+        if opt == "Bollinger Bands":
+            upper, mid, lower = compute_bollinger(hist["Close"])
+            fig.add_trace(go.Scatter(x=hist.index, y=upper, line=dict(color="#9b59b6", width=1, dash="dot"),
+                                      name="BB Upper"), row=1, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=lower, line=dict(color="#9b59b6", width=1, dash="dot"),
+                                      name="BB Lower", fill="tonexty",
+                                      fillcolor="rgba(155,89,182,0.08)"), row=1, col=1)
+        elif opt == "VWAP":
+            fig.add_trace(go.Scatter(x=hist.index, y=compute_vwap(hist),
+                                      line=dict(color="#e67e22", width=1.3), name="VWAP"), row=1, col=1)
+        elif opt.startswith("SMA"):
+            n = int(opt.split()[1])
+            if len(hist) >= n:
+                fig.add_trace(go.Scatter(x=hist.index, y=hist["Close"].rolling(n).mean(),
+                                          line=dict(color=overlay_colors[opt], width=1.3), name=opt), row=1, col=1)
+        elif opt.startswith("EMA"):
+            n = int(opt.split()[1])
+            fig.add_trace(go.Scatter(x=hist.index, y=compute_ema(hist["Close"], n),
+                                      line=dict(color=overlay_colors[opt], width=1.3, dash="dash"), name=opt), row=1, col=1)
 
     volume_colors = np.where(hist["Close"] >= hist["Open"], "#2ecc71", "#e74c3c")
     fig.add_trace(go.Bar(
         x=hist.index, y=hist["Volume"], name="Volume",
         marker_color=volume_colors, showlegend=False,
     ), row=2, col=1)
+    fig.update_yaxes(title_text="Volume", row=2, col=1)
+
+    current_row = 3
+    for sp in selected_subpanels:
+        if sp == "RSI":
+            rsi_series = compute_rsi(hist["Close"])
+            fig.add_trace(go.Scatter(x=hist.index, y=rsi_series, name="RSI",
+                                      line=dict(color="#8e44ad", width=1.3)), row=current_row, col=1)
+            fig.add_hline(y=70, line_dash="dot", line_color="rgba(239,68,68,0.5)", row=current_row, col=1)
+            fig.add_hline(y=30, line_dash="dot", line_color="rgba(34,197,94,0.5)", row=current_row, col=1)
+            fig.update_yaxes(title_text="RSI", range=[0, 100], row=current_row, col=1)
+        elif sp == "MACD":
+            macd_line, signal_line, macd_hist = compute_macd(hist["Close"])
+            hist_colors = np.where(macd_hist >= 0, "#2ecc71", "#e74c3c")
+            fig.add_trace(go.Bar(x=hist.index, y=macd_hist, name="MACD Hist",
+                                  marker_color=hist_colors, showlegend=False), row=current_row, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=macd_line, name="MACD",
+                                      line=dict(color="#3498db", width=1.2)), row=current_row, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=signal_line, name="Signal",
+                                      line=dict(color="#e67e22", width=1.2)), row=current_row, col=1)
+            fig.update_yaxes(title_text="MACD", row=current_row, col=1)
+        elif sp == "Stochastic":
+            k, d = compute_stochastic(hist)
+            fig.add_trace(go.Scatter(x=hist.index, y=k, name="%K",
+                                      line=dict(color="#3498db", width=1.2)), row=current_row, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=d, name="%D",
+                                      line=dict(color="#e67e22", width=1.2)), row=current_row, col=1)
+            fig.update_yaxes(title_text="Stochastic", range=[0, 100], row=current_row, col=1)
+        current_row += 1
 
     fig.update_layout(
         title=f"{company_name} ({ticker}) — {timeframe_label}",
         xaxis_rangeslider_visible=False,
-        height=520,
-        margin=dict(t=50, b=20, l=20, r=20),
+        height=360 + n_sub * 90,
+        margin=dict(t=45, b=10, l=10, r=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
     )
     fig.update_yaxes(title_text=f"Price ({currency_symbol.strip()})", row=1, col=1)
-    fig.update_yaxes(title_text="Volume", row=2, col=1)
 
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     last_price = hist["Close"].iloc[-1]
     prev_price = hist["Close"].iloc[0]
@@ -492,28 +542,16 @@ def render_price_chart(hist: pd.DataFrame, ticker: str, company_name: str,
 
 
 def render_live_chart_section(ticker: str, company_name: str, currency_symbol: str):
-    """
-    Full chart widget: timeframe selector + optional auto-refresh, to be
-    called right after render_risk_panel() for the same searched stock.
-    """
-    st.subheader("Price Chart")
+    """Render the chart widget with timeframe selection for the searched stock."""
+    st.subheader("Chart")
 
-    col_tf, col_refresh = st.columns([3, 1])
-    with col_tf:
-        timeframe_label = st.radio(
-            "Timeframe", list(CHART_TIMEFRAMES.keys()),
-            index=0, horizontal=True, key=f"tf_{ticker}",
-        )
-    with col_refresh:
-        auto_refresh = st.checkbox("Live (30s refresh)", key=f"auto_{ticker}")
+    timeframe_label = st.selectbox(
+        "Timeframe", list(CHART_TIMEFRAMES.keys()),
+        index=0, key=f"tf_{ticker}",
+    )
 
     chart_data = get_chart_data(ticker, timeframe_label)
     render_price_chart(chart_data, ticker, company_name, currency_symbol, timeframe_label)
-
-    if auto_refresh:
-        st.caption("Auto-refreshing every 30 seconds. Data is delayed ~15 min (Yahoo Finance), not tick-by-tick.")
-        time.sleep(30)
-        st.rerun()
 
 
 def _risk_gauge(risk_index: float) -> go.Figure:
